@@ -100,7 +100,13 @@ see http://www.redmine.org/projects/redmine/wiki/Rest_api#Collection-resources-a
   '(nil
     nil
     "%d"))
+(defvar org-redmine-assignee-id nil)
 
+(defstruct org-redmine-issue-struct
+  "A structure to keep issue properties"
+  subject
+  project_id
+  )
 ;;------------------------------
 ;; org-redmine error signals
 ;;------------------------------
@@ -250,10 +256,44 @@ Example.
          (message "%s: Non JSON data because of a server side exception. See %s"
                   (error-message-string err) org-redmine-curl-buffer))))))
 
+(defun org-redmine-curl-post (uri data)
+  ""
+  (ignore-errors (kill-buffer org-redmine-curl-buffer))
+  (unless (eq 0 (apply 'call-process "curl" nil `(,org-redmine-curl-buffer nil) nil
+                       (org-redmine-curl-post-args uri data)
+                       ))
+    (signal 'org-redmine-exception-not-retrieved "The requested URL returned error"))
+  (save-current-buffer
+    (set-buffer org-redmine-curl-buffer)
+    (let ((json-object-type 'hash-table)
+          (json-array-type 'list))
+      (condition-case err
+          (json-read-from-string (buffer-string))
+        (json-readtable-error
+         (message "%s: Non JSON data because of a server side exception. See %s"
+                  (error-message-string err) org-redmine-curl-buffer))))))
+
+
 (defun org-redmine-curl-args (uri)
   (let ((args '("-X" "GET" "-s" "-f")))
     (append
      args
+     (cond (org-redmine-auth-api-key
+            `("-G" "-d"
+              ,(format "key=%s" org-redmine-auth-api-key)))
+           (org-redmine-auth-username
+            `("-u"
+              ,(format "%s:%s"
+                       org-redmine-auth-username (or org-redmine-auth-password ""))))
+           (org-redmine-auth-netrc-use '("--netrc"))
+           (t ""))
+     `(,uri))))
+
+(defun org-redmine-curl-post-args (uri data)
+  (let ((args '("-X" "POST" "-s" "-f" "-H" "Content-Type: application/json" "-d")))
+    (append
+     args
+     (list data)
      (cond (org-redmine-auth-api-key
             `("-G" "-d"
               ,(format "key=%s" org-redmine-auth-api-key)))
@@ -397,6 +437,19 @@ Return cons (issue_id . updated_on)"
         (org-redmine-insert-property issue))))
 
 ;;------------------------------
+;; org-redmine read buffer functions
+;;------------------------------
+(defun org-redmine-cur-org-issue ()
+ (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (nth 1 (org-get-tags))))
+
+(defun org-redmine-jsonize-issue (issue)
+  (concat "{ \"issue\": {"
+         "\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
+         "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\"" ","
+         "\"assigned_to_id\":" org-redmine-assignee-id
+       "}}")
+)
+;;------------------------------
 ;; org-redmine sources for user function
 ;;------------------------------
 (defun org-redmine-get-issue-all (me)
@@ -486,6 +539,25 @@ Example.
                  ("Insert Subtree"
                   . (lambda (issue) (org-redmine-insert-subtree issue)))))))
    ))
+
+(defun org-redmine-update-issue ()
+  ""
+  (interactive)
+  (let (org-issue issue)
+    (condition-case err
+        (progn
+          (setq org-issue (org-redmine-jsonize-issue (org-redmine-cur-org-issue)))
+          (setq issue (org-redmine-curl-post
+                       (format "%s/issues.json" org-redmine-uri) org-issue ))
+          (org-cut-subtree)
+          (org-redmine-insert-subtree (orutil-gethash issue "issue")))
+          ;;(yank)
+
+      
+      (org-redmine-exception-not-retrieved
+       (orutil-print-error
+        (format "%s: Can't update issue #%s on %s"
+                (error-message-string err) issue-id org-redmine-uri))))))
 
 (provide 'org-redmine)
 
