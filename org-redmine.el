@@ -256,11 +256,11 @@ Example.
          (message "%s: Non JSON data because of a server side exception. See %s"
                   (error-message-string err) org-redmine-curl-buffer))))))
 
-(defun org-redmine-curl-post (uri data)
+(defun org-redmine-curl-post (uri data method)
   ""
   (ignore-errors (kill-buffer org-redmine-curl-buffer))
   (unless (eq 0 (apply 'call-process "curl" nil `(,org-redmine-curl-buffer nil) nil
-                       (org-redmine-curl-post-args uri data)
+                       (org-redmine-curl-post-args uri data method)
                        ))
     (signal 'org-redmine-exception-not-retrieved "The requested URL returned error"))
   (save-current-buffer
@@ -268,11 +268,14 @@ Example.
     (let ((json-object-type 'hash-table)
           (json-array-type 'list))
       (condition-case err
-          (json-read-from-string (buffer-string))
+            (unless (string= (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" (buffer-string))) "")
+            (json-read-from-string (buffer-string)))
         (json-readtable-error
          (message "%s: Non JSON data because of a server side exception. See %s"
                   (error-message-string err) org-redmine-curl-buffer))))))
 
+          ;;(setq trimed-string (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" (buffer-string))))
+        ;;(unless (eq (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" (buffer-string))) "")
 
 (defun org-redmine-curl-args (uri)
   (let ((args '("-X" "GET" "-s" "-f")))
@@ -289,9 +292,10 @@ Example.
            (t ""))
      `(,uri))))
 
-(defun org-redmine-curl-post-args (uri data)
-  (let ((args '("-X" "POST" "-s" "-f" "-H" "Content-Type: application/json" "-d")))
+(defun org-redmine-curl-post-args (uri data method)
+  (let ((args '("-s" "-f" "-H" "Content-Type: application/json" "-d")))
     (append
+     (list "-X" method)
      args
      (list data)
      (cond (org-redmine-auth-api-key
@@ -449,6 +453,19 @@ Return cons (issue_id . updated_on)"
          "\"assigned_to_id\":" org-redmine-assignee-id
        "}}")
 )
+
+(defun org-redmine-create-time-entry-json (issue_id spent_hours)
+  (concat "{ \"time_entry\": {"
+         "\"issue_id\":" issue_id ","
+         "\"hours\":" (number-to-string spent_hours) ","
+         "\"activity_id\":11"
+       "}}")
+ )
+
+(defun org-redmine-close-issue-json ()
+  (concat "{ \"issue\": {\"status_id\":5}}")
+ )
+
 ;;------------------------------
 ;; org-redmine sources for user function
 ;;------------------------------
@@ -540,7 +557,18 @@ Example.
                   . (lambda (issue) (org-redmine-insert-subtree issue)))))))
    ))
 
-(defun org-redmine-update-issue ()
+(defun org-redmine-close-issue ()
+  ""
+  (interactive)
+  (setq issue-id (org-entry-get nil "issue_id"))
+  (if issue-id (progn
+                     (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
+                     (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
+                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
+                     (org-todo "DONE"))    
+                     (message "Error: issue_id missing")))
+
+(defun org-redmine-create-issue ()
   ""
   (interactive)
   (let (org-issue issue)
@@ -548,15 +576,14 @@ Example.
         (progn
           (setq org-issue (org-redmine-jsonize-issue (org-redmine-cur-org-issue)))
           (setq issue (org-redmine-curl-post
-                       (format "%s/issues.json" org-redmine-uri) org-issue ))
+                       (format "%s/issues.json" org-redmine-uri) org-issue "POST"))
           (org-cut-subtree)
           (org-redmine-insert-subtree (orutil-gethash issue "issue")))
           ;;(yank)
-
       
       (org-redmine-exception-not-retrieved
        (orutil-print-error
-        (format "%s: Can't update issue #%s on %s"
+        (format "%s: Can't create issue #%s on %s"
                 (error-message-string err) issue-id org-redmine-uri))))))
 
 (provide 'org-redmine)
