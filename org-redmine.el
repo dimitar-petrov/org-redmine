@@ -574,11 +574,13 @@ Example.
   (let (org-issue issue)
     (condition-case err
         (progn
+          (setq issue-tags (org-get-tags))
           (setq org-issue (org-redmine-jsonize-issue (org-redmine-cur-org-issue)))
           (setq issue (org-redmine-curl-post
                        (format "%s/issues.json" org-redmine-uri) org-issue "POST"))
           (org-cut-subtree)
-          (org-redmine-insert-subtree (orutil-gethash issue "issue")))
+          (org-redmine-insert-subtree (orutil-gethash issue "issue"))
+          (org-set-tags-to issue-tags))
           ;;(yank)
       
       (org-redmine-exception-not-retrieved
