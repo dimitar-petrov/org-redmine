@@ -578,6 +578,15 @@ Example.
                                   . (lambda (issue) (org-redmine-insert-subtree issue))))))
     (message "`helm` is not available. Please install it.")))
 
+(defun org-redmine-browse-issue ()
+  "open the current issue in the browser"
+  (interactive)
+  (setq issue-id (org-entry-get nil "issue_id"))
+  (if issue-id               
+      (browse-url (format "%s/issues/%s" org-redmine-uri issue-id))
+    (message "Error: issue_id missing")))
+                             
+
 (defun org-redmine-close-issue ()
   ""
   (interactive)
@@ -586,6 +595,17 @@ Example.
                      (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
                      (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
                      (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
+                     (org-todo "DONE"))    
+                     (message "Error: issue_id missing")))
+
+(defun org-redmine-close-issue-locally ()
+  ""
+  (interactive)
+  (setq issue-id (org-entry-get nil "issue_id"))
+  (if issue-id (progn
+                     (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
+                     (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
+                     ;;(org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
                      (org-todo "DONE"))    
                      (message "Error: issue_id missing")))
 
