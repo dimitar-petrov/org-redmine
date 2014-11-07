@@ -101,6 +101,7 @@ see http://www.redmine.org/projects/redmine/wiki/Rest_api#Collection-resources-a
     nil
     "%d"))
 (defvar org-redmine-assignee-id nil)
+(defvar org-redmine-team-room-buffer "*Messages*")
 
 (defstruct org-redmine-issue-struct
   "A structure to keep issue properties"
@@ -574,7 +575,8 @@ Example.
                      (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
                      (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
                      (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
-                     (org-todo "DONE"))    
+                     (org-todo "DONE")
+                     (org-redmine-report (format "closed %s" (org-get-heading))))
                      (message "Error: issue_id missing")))
 
 (defun org-redmine-close-issue-locally ()
@@ -587,6 +589,24 @@ Example.
                      ;;(org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
                      (org-todo "DONE"))    
                      (message "Error: issue_id missing")))
+
+(defun org-redmine-clock-in-and-report ()
+  "Clock in the Org issue at cursor and send a jabber message to the team"
+  (interactive)
+  (setq status-message (format "is on %s" (org-get-heading)))
+  (org-clock-in)
+  (org-redmine-report status-message))
+
+(defun org-redmine-report (status-message)
+  "send the status message to the jabber buffer"
+  (setq status-message (format "/me %s" status-message))
+  (let ((oldbuf (current-buffer)))
+    (save-current-buffer
+      (set-buffer (get-buffer-create org-redmine-team-room-buffer))
+      (goto-char jabber-point-insert)
+      (insert status-message)
+      (jabber-chat-buffer-send)
+      )))
 
 (defun org-redmine-create-issue ()
   ""
