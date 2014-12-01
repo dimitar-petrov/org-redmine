@@ -574,7 +574,7 @@ Example.
   (if issue-id (progn
                      (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
                      (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
-                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
+                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":3}}" "PUT")
                      (org-todo "DONE")
                      (org-redmine-report (format "closed %s" (org-get-heading))))
                      (message "Error: issue_id missing")))
