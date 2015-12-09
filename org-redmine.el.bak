@@ -2,31 +2,31 @@
 
 ;; Author: Wataru MIYAGUNI <gonngo@gmail.com>
 ;; URL: https://github.com/gongo/org-redmine
-;; Keywords: redmine org
-;; Version: 0.1.0
+;; Package-Requires: ((anything "0"))
+;; Keywords: redmine
 
-;; Copyright (c) 2015 Wataru MIYAGUNI
+;; License: MAHALO License (based on MIT License)
 ;;
-;; MIT License
+;;   Copyright (c) 2011 Wataru MIYAGUNI
 ;;
-;; Permission is hereby granted, free of charge, to any person obtaining
-;; a copy of this software and associated documentation files (the
-;; "Software"), to deal in the Software without restriction, including
-;; without limitation the rights to use, copy, modify, merge, publish,
-;; distribute, sublicense, and/or sell copies of the Software, and to
-;; permit persons to whom the Software is furnished to do so, subject to
-;; the following conditions:
+;;   Permission is hereby granted, free of charge, to any person obtaining a copy
+;;   of this software and associated documentation files (the "Software"), to deal
+;;   in the Software without restriction, including without limitation the rights
+;;   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+;;   copies of the Software, and to permit persons to whom the Software is
+;;   furnished to do so, subject to the following conditions:
 ;;
-;; The above copyright notice and this permission notice shall be
-;; included in all copies or substantial portions of the Software.
+;;     1. The above copyright notice and this permission notice shall be included in
+;;        all copies or substantial portions of the Software.
+;;     2. Shall be grateful for something (including, but not limited this software).
 ;;
-;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-;; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-;; LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-;; OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-;; WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+;;   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;;   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;;   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+;;   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;;   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+;;   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+;;   THE SOFTWARE.
 
 ;;; Commentary:
 
@@ -39,10 +39,7 @@
   (require 'cl))
 (require 'org)
 (require 'json)
-
-(declare-function helm "helm")
-(declare-function helm-make-source "helm-source")
-(declare-function anything "anything")
+(require 'anything)
 
 (defconst org-redmine-config-default-limit 25
   "Default value the number of items to be present in the response.
@@ -533,7 +530,6 @@ Example.
 ;;------------------------------
 ;; org-redmine user function
 ;;------------------------------
-;;;###autoload
 (defun org-redmine-get-issue (issue-id)
   ""
   (interactive "sIssue ID: ")
@@ -548,36 +544,19 @@ Example.
         (format "%s: Can't find issue #%s on %s"
                 (error-message-string err) issue-id org-redmine-uri))))))
 
-;;;###autoload
 (defun org-redmine-anything-show-issue-all (&optional me)
   "Display recent issues using `anything'"
   (interactive "P")
-  (if (require 'anything nil t)
-      (anything
-       `(((name . "Issues")
-          (candidates . ,(org-redmine-get-issue-all me))
-          (candidate-transformer . org-redmine-transformer-issues-source)
-          (volatile)
-          (action . (("Open Browser"
-                      . (lambda (issue) (browse-url (org-redmine-issue-uri issue))))
-                     ("Insert Subtree"
-                      . (lambda (issue) (org-redmine-insert-subtree issue))))))))
-    (message "`anything` is not available. Please install it.")))
-
-;;;###autoload
-(defun org-redmine-helm-show-issue-all (&optional me)
-  "Display recent issues using `helm'"
-  (interactive "P")
-  (if (require 'helm nil t)
-      (helm :sources (helm-make-source "Issues" 'helm-source-sync
-                       :candidates (lambda () (org-redmine-get-issue-all me))
-                       :candidate-transformer '(org-redmine-transformer-issues-source)
-                       :volatile t
-                       :action '(("Open Browser"
-                                  . (lambda (issue) (browse-url (org-redmine-issue-uri issue))))
-                                 ("Insert Subtree"
-                                  . (lambda (issue) (org-redmine-insert-subtree issue))))))
-    (message "`helm` is not available. Please install it.")))
+  (anything
+   `(((name . "Issues")
+      (candidates . ,(org-redmine-get-issue-all me))
+      (candidate-transformer . org-redmine-transformer-issues-source)
+      (volatile)
+      (action . (("Open Browser"
+                  . (lambda (issue) (browse-url (org-redmine-issue-uri issue))))
+                 ("Insert Subtree"
+                  . (lambda (issue) (org-redmine-insert-subtree issue)))))))
+   ))
 
 (defun org-redmine-browse-issue ()
   "open the current issue in the browser"
@@ -588,18 +567,6 @@ Example.
     (message "Error: issue_id missing")))
                              
 
-(defun org-redmine-resolve-issue ()
-  ""
-  (interactive)
-  (setq issue-id (org-entry-get nil "issue_id"))
-  (if issue-id (progn
-                     (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
-                     (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
-                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":3}}" "PUT")
-                     (org-todo "DONE")
-                     (org-redmine-report (format "resolved %s" (org-get-heading))))
-                     (message "Error: issue_id missing")))
-
 (defun org-redmine-close-issue ()
   ""
   (interactive)
@@ -607,7 +574,7 @@ Example.
   (if issue-id (progn
                      (setq time-entry-data (org-redmine-create-time-entry-json issue-id (/ (org-clock-sum-current-item) 60.0)))
                      (setq time_entry (org-redmine-curl-post (format "%s/time_entries.json" org-redmine-uri) time-entry-data "POST"))
-                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":5}}" "PUT")
+                     (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":3}}" "PUT")
                      (org-todo "DONE")
                      (org-redmine-report (format "closed %s" (org-get-heading))))
                      (message "Error: issue_id missing")))
