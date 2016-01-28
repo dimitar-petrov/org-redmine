@@ -76,6 +76,11 @@ see http://www.redmine.org/projects/redmine/wiki/Rest_api#Collection-resources-a
     ("%v_n%"     "fixed_version" "name")
     ("%v_i%"     "fixed_version" "id")))
 
+;;translate tags from something legal in org to
+;;the actual project id on the redmine. user might decide to use
+;;to have less complicated project names
+(defvar org-redmine-tag-to-project-id-table
+  '(("off" . "time-off")))
 
 (defvar org-redmine-uri "http://redmine120.dev"
   "Target Redmine URI")
@@ -393,7 +398,13 @@ Return cons (issue_id . updated_on)"
      (cdr (assoc org-redmine-property-id-name properties))
      (cdr (assoc org-redmine-property-updated-name properties)))))
 
-
+(defun org-redmine-entry-get-project-id ()
+  "Get project id from the tags and traslate it to redmine
+   format if necessary"
+  (let ((org-project-id (nth 1 (org-get-tags))))
+    (let ((redmine-project-id
+           (cdr (assoc org-project-id org-redmine-tag-to-project-id-table))))
+      (if redmine-project-id redmine-project-id org-project-id))))
 ;;------------------------------
 ;; org-redmine buffer function
 ;;------------------------------
@@ -445,7 +456,7 @@ Return cons (issue_id . updated_on)"
 ;; org-redmine read buffer functions
 ;;------------------------------
 (defun org-redmine-cur-org-issue ()
- (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (nth 1 (org-get-tags))))
+  (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (org-redmine-entry-get-project-id)))
 
 (defun org-redmine-jsonize-issue (issue)
   (concat "{ \"issue\": {"
