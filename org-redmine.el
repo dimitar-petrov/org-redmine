@@ -108,6 +108,9 @@ see http://www.redmine.org/projects/redmine/wiki/Rest_api#Collection-resources-a
 (defvar org-redmine-assignee-id nil)
 (defvar org-redmine-team-room-buffer "*Messages*")
 
+;;for now all todo are tasks
+(setq org-redmine-tracker-id "4")
+
 (defstruct org-redmine-issue-struct
   "A structure to keep issue properties"
   subject
@@ -459,10 +462,11 @@ Return cons (issue_id . updated_on)"
   (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (org-redmine-entry-get-project-id)))
 
 (defun org-redmine-jsonize-issue (issue)
-  (concat "{ \"issue\": {"
-         "\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
+  (concat "{\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
+         " \"issue\": {"
          "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\"" ","
-         "\"assigned_to_id\":" org-redmine-assignee-id
+         "\"assigned_to_id\":" org-redmine-assignee-id ","
+         "\"tracker_id\":" org-redmine-tracker-id
        "}}")
 )
 
