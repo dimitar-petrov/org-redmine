@@ -581,7 +581,6 @@ Example.
       (browse-url (format "%s/issues/%s" org-redmine-uri issue-id))
     (message "Error: issue_id missing")))
                              
-
 (defun org-redmine-resolve-issue ()
   ""
   (interactive)
@@ -622,6 +621,10 @@ Example.
   (interactive)
   (setq status-message (format "is on %s" (org-get-heading)))
   (org-clock-in)
+  (org-todo "IN-PROGRESS")
+  (setq issue-id (org-entry-get nil "issue_id"))
+  (if issue-id (org-redmine-curl-post (format "%s/issues/%s.json" org-redmine-uri issue-id) "{ \"issue\": {\"status_id\":2}}" "PUT")
+    (message "Warning: issue_id missing"))
   (org-redmine-report status-message))
 
 (defun org-redmine-report (status-message)
@@ -648,7 +651,6 @@ Example.
           (org-cut-subtree)
           (org-redmine-insert-subtree (orutil-gethash issue "issue"))
           (org-set-tags-to issue-tags))
-          ;;(yank)
       
       (org-redmine-exception-not-retrieved
        (orutil-print-error
