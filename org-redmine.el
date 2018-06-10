@@ -311,15 +311,14 @@ Example.
      args
      (list data)
      (cond (org-redmine-auth-api-key
-            `("-G" "-d"
-              ,(format "key=%s" org-redmine-auth-api-key)))
+            `(,(format "%s?key=%s" uri org-redmine-auth-api-key)))
            (org-redmine-auth-username
             `("-u"
-              ,(format "%s:%s"
-                       org-redmine-auth-username (or org-redmine-auth-password ""))))
-           (org-redmine-auth-netrc-use '("--netrc"))
-           (t ""))
-     `(,uri))))
+              ,(format "%s:%s %s"
+                       org-redmine-auth-username (or org-redmine-auth-password "") uri)))
+           (org-redmine-auth-netrc-use (format "--netrc %s" uri))
+           (t 
+     "")))))
 
 ;;------------------------------
 ;; org-redmine template functions
@@ -465,13 +464,13 @@ Return cons (issue_id . updated_on)"
   (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (org-redmine-entry-get-project-id)))
 
 (defun org-redmine-jsonize-issue (issue)
-  (concat "{\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
-         " \"issue\": {"
-         "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\"" ","
-         "\"assigned_to_id\":" org-redmine-assignee-id ","
-         "\"tracker_id\":" org-redmine-tracker-id
-       "}}")
-)
+  (concat "{ \"issue\": {"
+          "\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
+          "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\""
+          ;; "\"assigned_to_id\": \"" org-redmine-assignee-id "\""
+          ;; "\"tracker_id\":" org-redmine-tracker-id "}}"
+          "}}"
+          ))
 
 (defun org-redmine-create-time-entry-json (issue_id spent_hours)
   (concat "{ \"time_entry\": {"
