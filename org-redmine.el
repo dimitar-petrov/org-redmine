@@ -118,6 +118,8 @@ see http://www.redmine.org/projects/redmine/wiki/Rest_api#Collection-resources-a
   "A structure to keep issue properties"
   subject
   project_id
+  issue_id
+  description
   )
 ;;------------------------------
 ;; org-redmine error signals
@@ -403,10 +405,16 @@ Return cons (issue_id . updated_on)"
      (cdr (assoc org-redmine-property-id-name properties))
      (cdr (assoc org-redmine-property-updated-name properties)))))
 
+
+(defun org-redmine-entry-get-issue-id ()
+  "Get issue id from the properties"
+  (cdr (nth 0 (org-entry-properties nil "ISSUE_ID"))))
+
 (defun org-redmine-entry-get-project-id ()
-  "Get project id from the tags and traslate it to redmine
+  "Get project id from the properties and translate it to redmine
    format if necessary"
-  (let ((org-project-id (nth 1 (org-get-tags))))
+  ;; (let ((org-project-id (nth 1 (org-get-tags))))
+  (let ((org-project-id (cdr (nth 0 (org-entry-properties nil "PROJECT")))))
     (let ((redmine-project-id
            (cdr (assoc org-project-id org-redmine-tag-to-project-id-table))))
       (if redmine-project-id redmine-project-id org-project-id))))
@@ -460,13 +468,39 @@ Return cons (issue_id . updated_on)"
 ;;------------------------------
 ;; org-redmine read buffer functions
 ;;------------------------------
+(defun org-redmine-entity-description-start-point()
+  (save-excursion
+    (beginning-of-line)
+    (search-forward ":END:" nil t)
+    (1+ (point-at-eol))))
+
+(defun org-redmine-entity-description-end-point()
+  (org-element-property :contents-end (org-element-at-point)))
+
+(defun org-redmine-entity-description-region()
+  `(,(org-redmine-entity-description-start-point)
+    ,(org-redmine-entity-description-end-point)))
+
+(defun org-redmine-buffer--extract-entity-description-at-point ()
+  "Given the current position, extract the text content of current card."
+  (apply 'buffer-substring-no-properties
+         (org-redmine-entity-description-region)))
+
 (defun org-redmine-cur-org-issue ()
-  (make-org-redmine-issue-struct :subject (nth 4 (org-heading-components)) :project_id (org-redmine-entry-get-project-id)))
+  (make-org-redmine-issue-struct
+   :subject (nth 4 (org-heading-components))
+   :project_id (org-redmine-entry-get-project-id)
+   :issue_id (org-redmine-entry-get-issue-id)
+   :description (replace-regexp-in-string "\n" " " (org-redmine-buffer--extract-entity-description-at-point))))
 
 (defun org-redmine-jsonize-issue (issue)
+  (setq issue_id (org-redmine-issue-struct-issue_id issue))
   (concat "{ \"issue\": {"
           "\"project_id\": \"" (org-redmine-issue-struct-project_id issue) "\"" ","
-          "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\""
+          "\"subject\": \"" (org-redmine-issue-struct-subject issue) "\"" ","
+          "\"description\": \"" (org-redmine-issue-struct-description issue) "\""
+          (when issue-id
+            (concat "," "\"issue_id\": \"" (org-redmine-issue-struct-issue_id issue) "\""))
           ;; "\"assigned_to_id\": \"" org-redmine-assignee-id "\""
           ;; "\"tracker_id\":" org-redmine-tracker-id "}}"
           "}}"
@@ -662,18 +696,27 @@ Example.
     (condition-case err
         (progn
           (setq issue-tags (org-get-tags))
-          (setq org-issue (org-redmine-jsonize-issue (org-redmine-cur-org-issue)))
-          (setq issue (org-redmine-curl-post
-                       (format "%s/issues.json" org-redmine-uri) org-issue "POST"))
-          (org-cut-subtree)
-          (org-redmine-insert-subtree (orutil-gethash issue "issue"))
-          (org-set-tags-to issue-tags))
-          ;;(yank)
+          (setq cur-org-issue (org-redmine-cur-org-issue))
+          (setq org-issue (org-redmine-jsonize-issue cur-org-issue))
+          (setq issue_id (org-redmine-issue-struct-issue_id cur-org-issue))
+          (if issue_id
+              (progn
+                (org-redmine-curl-post
+                 (format "%s/issues/%s.json" org-redmine-uri issue_id) org-issue "PUT")
+                (setq issue (org-redmine-curl-get
+                             (format "%s/issues/%s.json" org-redmine-uri issue_id))))
+            (progn
+              (setq issue (org-redmine-curl-post
+                           (format "%s/issues.json" org-redmine-uri) org-issue "POST"))
+              (org-cut-subtree)
+              (org-redmine-insert-subtree (orutil-gethash issue "issue"))
+              (org-set-tags-to issue-tags)))
+            ;;(yank)
       
       (org-redmine-exception-not-retrieved
        (orutil-print-error
         (format "%s: Can't create issue #%s on %s"
-                (error-message-string err) issue-id org-redmine-uri))))))
+                (error-message-string err) issue_id org-redmine-uri)))))))
 
 (provide 'org-redmine)
 
